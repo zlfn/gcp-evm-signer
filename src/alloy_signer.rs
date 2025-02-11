@@ -1,27 +1,9 @@
 use alloy::{consensus::SignableTransaction, primitives::{Address, ChainId, FixedBytes, PrimitiveSignature, B256}, signers::{sign_transaction_with_chain_id, Signer}};
 use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine};
-use serde::{Deserialize, Serialize};
 use spki::DecodePublicKey;
 use k256::ecdsa::VerifyingKey;
-
-#[derive(Clone, Debug)]
-pub struct GcpKeyRef {
-    pub project_id: String,
-    pub location: String,
-    pub version: u64,
-    pub key_ring: String,
-    pub key_name: String,
-}
-
-impl GcpKeyRef {
-    pub fn to_specifier(&self) -> String {
-        format!(
-            "projects/{}/locations/{}/keyRings/{}/cryptoKeys/{}/cryptoKeyVersions/{}",
-            self.project_id, self.location, self.key_ring, self.key_name, self.version
-        )
-    }
-}
+use crate::common::{Digest, GcpKeyRef, SignRequest, SignResponse};
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -72,35 +54,6 @@ impl Signer for GcpRestSigner {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "lowercase")]
-enum Digest {
-    Sha256(String),
-    Sha384(String),
-    Sha512(String),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(untagged)]
-enum SignRequest {
-    DIGEST {
-        digest: Digest,
-        digest_crc32c: Option<String>
-    },
-    DATA {
-        data: String,
-        data_crc32c: Option<String>
-    },
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct SignResponse {
-    name: String,
-    signature: String,
-    signature_crc32c: String,
-    protection_level: String,
-}
 
 impl GcpRestSigner {
     pub async fn new_with_client(

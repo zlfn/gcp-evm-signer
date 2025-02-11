@@ -1,10 +1,15 @@
-use std::str::FromStr;
-
-use alloy::{consensus::{SignableTransaction, TxLegacy}, network::TxSigner, primitives::U256, providers::{Provider, ProviderBuilder}, rpc::client::RpcClient};
-use alloy_signer::{GcpKeyRef, GcpRestSigner};
-use reqwest::{header::{HeaderMap, HeaderValue}, ClientBuilder, Url};
+use common::GcpKeyRef;
+use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::ClientBuilder;
+use solana_client::rpc_client::RpcClient;
+use solana_sdk::message::Message;
+use solana_sdk::signer::Signer;
+use solana_sdk::system_instruction;
+use solana_sdk::transaction::Transaction;
 
 mod iam;
+mod common;
+mod solana_signer;
 mod alloy_signer;
 
 const PROJECT_ID: &str = "keymanagertest-449901";
@@ -27,33 +32,26 @@ async fn main() {
     let key = GcpKeyRef {
         project_id: PROJECT_ID.to_string(),
         location: LOCATION_ID.to_string(),
-        key_name: "test1".to_string(),
+        key_name: "test2".to_string(),
         version: 1,
-        key_ring: "evm_test_1".to_string(),
+        key_ring: "solana_test_1".to_string(),
     };
 
-    let signer = GcpRestSigner::new_with_client(client, key, None).await.unwrap();
-    println!("Address: {}", signer.address());
+    let solana_client = RpcClient::new("https://api.devnet.solana.com");
+    let block = solana_client.get_latest_blockhash().unwrap();
 
-    // Sepolia test net
-    let chain_id = 11155111;
-    let mut tx = TxLegacy {
-        to: signer.address().into(),
-        value: U256::from(1_000_000_000),
-        gas_limit: 21000,
-        nonce: 9,
-        gas_price: 100_000_000_000,
-        input: vec![].into(),
-        chain_id: Some(chain_id),
+    let signer = solana_signer::GcpSigner {
+        client,
+        key,
     };
 
-    let signature = signer.sign_transaction(&mut tx).await.unwrap();
-    println!("Signed!");
-    let tx = tx.into_signed(signature);
+    let address = signer.try_pubkey().unwrap();
+    println!("Address: {}", address);
 
-    let client = RpcClient::new_http(Url::from_str("https://1rpc.io/sepolia").unwrap());
-    let provider = ProviderBuilder::new().on_client(client);
-    let res = provider.send_tx_envelope(tx.into()).await.unwrap();
+    let transfer_instruction = system_instruction::transfer(&address, &address, 1_000_000_000);
+    let tx = Transaction::new(&[signer], Message::new(&[transfer_instruction], Some(&address)), block);
+    tx.verify().unwrap();
 
-    println!("Tx hash: {:?}", res);
+    let signature = solana_client.send_and_confirm_transaction(&tx).unwrap();
+    println!("TX Signature: {}", signature);
 }
