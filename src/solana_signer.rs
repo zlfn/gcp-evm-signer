@@ -1,5 +1,6 @@
 use base64::{prelude::BASE64_STANDARD, Engine};
 use solana_sdk::pubkey::Pubkey;
+use tokio::time::Instant;
 
 use crate::common::{GcpKeyRef, SignRequest, SignResponse};
 
@@ -34,10 +35,13 @@ impl solana_sdk::signer::Signer for GcpSigner {
         let resp = tokio::task::block_in_place(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async move {
-                self.client.post(&format!(
+                let start = Instant::now();
+                let x = self.client.post(&format!(
                     "https://cloudkms.googleapis.com/v1/{}:asymmetricSign",
                     self.key.to_specifier()
-                )).json(&req).send().await.unwrap().json::<SignResponse>().await.unwrap()
+                )).json(&req).send().await.unwrap().json::<SignResponse>().await.unwrap();
+                tracing::warn!("com: {:?}", start.elapsed());
+                x
             })
         });
 

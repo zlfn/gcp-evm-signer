@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use base64::{prelude::BASE64_STANDARD, Engine};
 use spki::DecodePublicKey;
 use k256::ecdsa::VerifyingKey;
+use tokio::time::Instant;
 use crate::common::{Digest, GcpKeyRef, SignRequest, SignResponse};
 
 #[derive(Clone)]
@@ -88,11 +89,13 @@ impl GcpRestSigner {
             digest_crc32c: None
         };
 
+        let start = Instant::now();
         let response = self.client.post(&format!(
             "https://cloudkms.googleapis.com/v1/{}:asymmetricSign",
             self.key.to_specifier()
         )).json(&request).send().await.unwrap();
         let response = response.json::<SignResponse>().await.unwrap();
+        tracing::warn!("com: {:?}", start.elapsed());
 
         let sig_bytes = BASE64_STANDARD.decode(response.signature).unwrap();
         let sig: asn1::ParseResult<_> = asn1::parse(&sig_bytes, |d| {
