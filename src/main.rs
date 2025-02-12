@@ -98,6 +98,7 @@ async fn solana_test() {
     let mut headers = HeaderMap::new();
     headers.insert("Authorization", HeaderValue::from_str(&format!("Bearer {}", token)).unwrap());
 
+    let start = Instant::now();
     let client = ClientBuilder::new()
         .default_headers(headers)
         .build()
@@ -111,20 +112,32 @@ async fn solana_test() {
         key_ring: "solana_test_1".to_string(),
     };
 
-    let solana_client = solana_client::rpc_client::RpcClient::new("https://api.devnet.solana.com");
-    let block = solana_client.get_latest_blockhash().unwrap();
-
     let signer = solana_signer::GcpSigner {
         client,
         key,
     };
 
+    let time_1 = Instant::now();
+    tracing::info!("Client created in {:?}", time_1.duration_since(start));
+
+    let solana_client = solana_client::rpc_client::RpcClient::new("https://api.devnet.solana.com");
+    let block = solana_client.get_latest_blockhash().unwrap();
+
+    let time_2 = Instant::now();
+    tracing::info!("Solana client created in {:?}", time_2.duration_since(time_1));
+
     let address = signer.try_pubkey().unwrap();
     println!("Address: {}", address);
+
+    let time_3 = Instant::now();
+    tracing::info!("Address fetched in {:?}", time_3.duration_since(time_2));
 
     let transfer_instruction = system_instruction::transfer(&address, &address, 1_000_000_000);
     let tx = Transaction::new(&[signer], Message::new(&[transfer_instruction], Some(&address)), block);
     tx.verify().unwrap();
+
+    let time_4 = Instant::now();
+    tracing::info!("Transaction created in {:?}", time_4.duration_since(time_3));
 
     let signature = solana_client.send_and_confirm_transaction(&tx).unwrap();
     println!("TX Signature: {}", signature);
